@@ -5,11 +5,13 @@ import java.util.Map;
 import javax.annotation.Nullable;
 
 import com.charles445.nanpolice.util.DebugUtil;
+import com.charles445.nanpolice.util.PoliceUtil;
 
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.DamageSource;
@@ -101,6 +103,8 @@ public class EventWatcher
 	public class Prioritized
 	{
 		private boolean announce_errors;
+		private boolean autofix_player;
+		private boolean autofix_creatures;
 		
 		public Prioritized(boolean register)
 		{
@@ -108,6 +112,8 @@ public class EventWatcher
 				MinecraftForge.EVENT_BUS.register(this);
 			
 			announce_errors=ModConfig.announce_errors;
+			autofix_player=ModConfig.autofix_player;
+			autofix_creatures=ModConfig.autofix_creatures;
 		}
 		
 		private String getPriorityString(EventPriority priority)
@@ -137,6 +143,35 @@ public class EventWatcher
 			
 			if(announce_errors)
 				DebugUtil.messageAll(event_name+" failure! Check Log");
+		}
+		
+		private void checkAndFixEventEntity(EntityLivingBase entity)
+		{
+			if(autofix_player)
+			{
+				if(entity instanceof EntityPlayerMP)
+				{
+					NaNPolice.logger.info("Running player autofix");
+					//PoliceUtil.fixHealthAll(FMLCommonHandler.instance().getMinecraftServerInstance());
+					PoliceUtil.fixHealth((EntityPlayerMP)entity);
+					return;
+				}
+			}
+			
+			if(autofix_creatures)
+			{	
+				EntityLivingBase living = (EntityLivingBase)entity;
+				if(!Float.isFinite(living.getHealth()))
+				{
+					NaNPolice.logger.info("Running creature health autofix");
+					living.setHealth(living.getMaxHealth());
+				}
+				if(!Float.isFinite(living.getAbsorptionAmount()))
+				{
+					NaNPolice.logger.info("Running creature absorption autofix");
+					living.setAbsorptionAmount(0.0f);
+				}
+			}
 		}
 		
 		private void examineDamageSource(DamageSource dsource)
@@ -255,6 +290,8 @@ public class EventWatcher
 			//event.setAmount(1.0f);
 			NaNPolice.logger.warn("Cancelling LivingHurtEvent");
 			event.setCanceled(true);
+			if(event.getEntityLiving()!=null)
+				checkAndFixEventEntity(event.getEntityLiving());
 		}
 		
 		private void logLivingHurtEvent(LivingHurtEvent event)
@@ -292,6 +329,9 @@ public class EventWatcher
 			logLivingDamageEvent(event);
 			NaNPolice.logger.warn("Cancelling LivingDamageEvent");
 			event.setCanceled(true);
+			if(event.getEntityLiving()!=null)
+				checkAndFixEventEntity(event.getEntityLiving());
+			
 		}
 		
 		private void logLivingDamageEvent(LivingDamageEvent event)
@@ -328,6 +368,8 @@ public class EventWatcher
 			logLivingHealEvent(event);
 			NaNPolice.logger.warn("Cancelling LivingHealEvent");
 			event.setCanceled(true);
+			if(event.getEntityLiving()!=null)
+				checkAndFixEventEntity(event.getEntityLiving());
 		}
 		
 		private void logLivingHealEvent(LivingHealEvent event)
@@ -358,6 +400,8 @@ public class EventWatcher
 			logLivingAttackEvent(event);
 			NaNPolice.logger.warn("Cancelling LivingAttackEvent");
 			event.setCanceled(true);
+			if(event.getEntityLiving()!=null)
+				checkAndFixEventEntity(event.getEntityLiving());
 		}
 		
 		private void logLivingAttackEvent(LivingAttackEvent event)
